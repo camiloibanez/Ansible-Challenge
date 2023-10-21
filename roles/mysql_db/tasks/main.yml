@@ -86,7 +86,7 @@
   - name: Create Table
     become: true
     mysql_query:
-      query: CREATE TABLE {{ db_name }}.employees (name VARCHAR(20));
+      query: CREATE TABLE IF NOT EXISTS {{ db_name }}.employees (name VARCHAR(20));
       login_unix_socket: '{{ mysqld_socket }}'
   # Add data
   - name: Insert data

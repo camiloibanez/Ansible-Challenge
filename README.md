@@ -53,3 +53,7 @@ On all instances
 ### To run
 
 ansible-playbook playbook.yml -i inventory --ask-vault-pass
+
+### To Clean up resources
+
+ansible-playbook cleanup-playbook.yml -i inventory --ask-vault-pass

@@ -1,0 +1,103 @@
+- name: Delete AWS infrastructure
+  hosts: localhost
+  tasks:
+    # Delete load Balancer
+    - name: Delete Load Balancer
+      amazon.aws.elb_application_lb:
+        name: AAC-lb
+        region: '{{ region }}'
+        state: absent
+        tags:
+          App: Ansible-adv
+    # Delete Target Group
+    - name: Delete Target Group
+      community.aws.elb_target_group:
+        name: AAC-tg
+        protocol: http
+        region: '{{ region }}'
+        port: 5000
+        vpc_id: '{{ my_vpc_id }}'
+        state: absent
+        tags:
+          App: Ansible-adv
+    # Delete lb security group
+    - name: Delete lb security group
+      amazon.aws.ec2_security_group:
+        name: lb_security_group
+        description: Allows http access
+        region: '{{ region }}'
+        vpc_id: '{{ my_vpc_id }}'
+        state: absent
+        tags:
+          App: Ansible-adv
+    # Delete ec2 Instances
+    - name: Delete db Instance in az-1
+      amazon.aws.ec2_instance:
+        name: db_server
+        region: '{{ region }}'
+        vpc_subnet_id: '{{ default_subnet_a }}'
+        instance_type: '{{ db_instance_type }}'
+        image_id: '{{ ubuntu_ami }}'
+        security_group: db_security_group
+        state: terminated
+        tags:
+          App: Ansible-adv
+    - name: Delete web server instance in az-2
+      amazon.aws.ec2_instance:
+        name: web_server1
+        region: '{{ region }}'
+        vpc_subnet_id: '{{ default_subnet_b }}'
+        instance_type: '{{ web_instance_type }}'
+        image_id: '{{ ubuntu_ami }}'
+        security_group: web_security_group
+        state: terminated
+        tags:
+          App: Ansible-adv
+    - name: Delete web server instance in az-3
+      amazon.aws.ec2_instance:
+        name: webserver2
+        region: '{{ region }}'
+        vpc_subnet_id: '{{ default_subnet_c }}'
+        instance_type: '{{ web_instance_type }}'
+        image_id: '{{ ubuntu_ami }}'
+        security_group: web_security_group
+        state: terminated
+        tags:
+          App: Ansible-adv
+    # Delete Key Pair
+    - name: Delete Key Pair
+      amazon.aws.ec2_key:
+        name: AAC-key
+        key_type: rsa
+        region: '{{ region }}'
+        state: absent
+        tags:
+          App: Ansible-adv
+    # Delete ec2 Security Groups
+    - name: Delete db security group
+      amazon.aws.ec2_security_group:
+        name: db_security_group
+        description: Allows mysql and ssh
+        region: '{{ region }}'
+        vpc_id: '{{ my_vpc_id }}'
+        state: absent
+        tags:
+          App: Ansible-adv
+    - name: Delete web security group
+      amazon.aws.ec2_security_group:
+        name: web_security_group
+        description: Allows Flask and ssh
+        region: '{{ region }}'
+        vpc_id: '{{ my_vpc_id }}'
+        state: absent
+        tags:
+          App: Ansible-adv
+    # Send confirmation email
+    - name: Send confirmation email
+      community.general.sendgrid:
+        api_key: '{{ sendgrid_api_key }}'
+        to_addresses: '{{ recipient_emails }}'
+        subject: 'App deleted'
+        body: 'Ansible advanced course distributed app infrastructure has been deleted'
+        from_address: '{{ sender_email }}'
+      delegate_to: localhost
