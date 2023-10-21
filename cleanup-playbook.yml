@@ -20,28 +20,7 @@
         state: absent
         tags:
           App: Ansible-adv
-    # Delete lb security group
-    - name: Delete lb security group
-      amazon.aws.ec2_security_group:
-        name: lb_security_group
-        description: Allows http access
-        region: '{{ region }}'
-        vpc_id: '{{ my_vpc_id }}'
-        state: absent
-        tags:
-          App: Ansible-adv
     # Delete ec2 Instances
-    - name: Delete db Instance in az-1
-      amazon.aws.ec2_instance:
-        name: db_server
-        region: '{{ region }}'
-        vpc_subnet_id: '{{ default_subnet_a }}'
-        instance_type: '{{ db_instance_type }}'
-        image_id: '{{ ubuntu_ami }}'
-        security_group: db_security_group
-        state: terminated
-        tags:
-          App: Ansible-adv
     - name: Delete web server instance in az-2
       amazon.aws.ec2_instance:
         name: web_server1
@@ -64,6 +43,17 @@
         state: terminated
         tags:
           App: Ansible-adv
+    - name: Delete db Instance in az-1
+      amazon.aws.ec2_instance:
+        name: db_server
+        region: '{{ region }}'
+        vpc_subnet_id: '{{ default_subnet_a }}'
+        instance_type: '{{ db_instance_type }}'
+        image_id: '{{ ubuntu_ami }}'
+        security_group: db_security_group
+        state: terminated
+        tags:
+          App: Ansible-adv
     # Delete Key Pair
     - name: Delete Key Pair
       amazon.aws.ec2_key:
@@ -73,7 +63,16 @@
         state: absent
         tags:
           App: Ansible-adv
-    # Delete ec2 Security Groups
+    # Delete Security Groups
+    - name: Delete lb security group
+      amazon.aws.ec2_security_group:
+        name: lb_security_group
+        description: Allows http access
+        region: '{{ region }}'
+        vpc_id: '{{ my_vpc_id }}'
+        state: absent
+        tags:
+          App: Ansible-adv
     - name: Delete db security group
       amazon.aws.ec2_security_group:
         name: db_security_group
