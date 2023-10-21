@@ -1,0 +1,205 @@
+- name: Create AWS ec2 Instances
+  hosts: localhost
+  tasks:
+    # Create Key Pair
+    - name: Create Key Pair
+      amazon.aws.ec2_key:
+        name: AAC-key
+        key_type: rsa
+        region: '{{ region }}'
+        state: present
+        file_name: creds/aws_ssh_rsa
+        tags:
+          App: Ansible-adv
+      register: AAC_key_pair
+    # Create Security Groups
+    - name: Create db security group
+      amazon.aws.ec2_security_group:
+        name: db_security_group
+        description: Allows mysql and ssh
+        region: '{{ region }}'
+        rules:
+          - proto: tcp
+            ports:
+              - 22
+            cidr_ip: 0.0.0.0/0
+            rule_desc: allow all traffic on port 22
+          - proto: tcp
+            ports:
+              - 3306
+            cidr_ip: 0.0.0.0/0
+            rule_desc: allow all traffic on port 3306
+        vpc_id: '{{ my_vpc_id }}'
+        state: present
+        tags:
+          App: Ansible-adv
+    - name: Create web security group
+      amazon.aws.ec2_security_group:
+        name: web_security_group
+        description: Allows Flask and ssh
+        region: '{{ region }}'
+        rules:
+          - proto: tcp
+            ports:
+              - 22
+            cidr_ip: 0.0.0.0/0
+            rule_desc: allow all traffic on port 22
+          - proto: tcp
+            ports:
+              - 5000
+            cidr_ip: 0.0.0.0/0
+            rule_desc: allow all traffic on port 5000
+        vpc_id: '{{ my_vpc_id }}'
+        state: present
+        tags:
+          App: Ansible-adv
+    # Create ec2 Instances
+    - name: Create db Instance in az-1
+      amazon.aws.ec2_instance:
+        region: '{{ region }}'
+        vpc_subnet_id: '{{ default_subnet_a }}'
+        instance_type: '{{ db_instance_type }}'
+        image_id: '{{ ubuntu_ami }}'
+        key_name: '{{ AAC_key_pair.key.name }}'
+        security_group: db_security_group
+        state: started
+        network:
+          assign_public_ip: true
+        tags:
+          App: Ansible-adv
+      register: db_instance
+    - name: Create web server instance in az-2
+      amazon.aws.ec2_instance:
+        region: '{{ region }}'
+        vpc_subnet_id: '{{ default_subnet_b }}'
+        instance_type: '{{ web_instance_type }}'
+        image_id: '{{ ubuntu_ami }}'
+        key_name: '{{ AAC_key_pair.key.name }}'
+        security_group: web_security_group
+        state: started
+        network:
+          assign_public_ip: true
+        tags:
+          App: Ansible-adv
+      register: web_instance1
+    - name: Create web server instance in az-3
+      amazon.aws.ec2_instance:
+        region: '{{ region }}'
+        vpc_subnet_id: '{{ default_subnet_c }}'
+        instance_type: '{{ web_instance_type }}'
+        image_id: '{{ ubuntu_ami }}'
+        key_name: '{{ AAC_key_pair.key.name }}'
+        security_group: web_security_group
+        state: started
+        network:
+          assign_public_ip: true
+        tags:
+          App: Ansible-adv
+      register: web_instance2
+    # Store ip addresses
+    - name: Set db_server public ip address in host_vars
+      lineinfile:
+        line: 'ansible_host: {{ db_instance.instances[0].public_ip_address }}'
+        regexp: '^ansible_host:'
+        path: host_vars/db_server.yml
+        state: present
+    - name: Set web_server1 public ip address in host_vars
+      lineinfile:
+        line: 'ansible_host: {{ web_instance1.instances[0].public_ip_address }}'
+        regexp: '^ansible_host:'
+        path: host_vars/web_server1.yml
+        state: present
+    - name: Set web_server2 public ip address in host_vars
+      lineinfile:
+        line: 'ansible_host: {{ web_instance2.instances[0].public_ip_address }}'
+        regexp: '^ansible_host:'
+        path: host_vars/web_server2.yml
+        state: present
+    - name: Set db_server public ip address in web_servers
+      lineinfile:
+        line: 'db_server_public_ip: {{ db_instance.instances[0].public_ip_address }}'
+        regexp: '^db_server_public_ip:'
+        path: group_vars/web_servers.yml
+        state: present
+
+# Install Python on all machines
+- name: Install Python
+  hosts: All_instances
+  roles:
+    - python
+# Install mysql on db instance
+- name: Install MySQL
+  hosts: db_server
+  roles:
+    - mysql_db
+# Install Flask on web instances
+- name: Install Flask
+  hosts: web_servers
+  roles:
+    - flask_web
+# Create Networking infrastructure
+- name: Create Networking infrastructure
+  hosts: localhost
+  tasks:
+    - name: Create Target Group
+      community.aws.elb_target_group:
+        name: AAC-tg
+        protocol: http
+        region: '{{ region }}'
+        port: 5000
+        vpc_id: '{{ my_vpc_id }}'
+        state: present
+        target_type: instance
+        targets:
+          - Id: '{{ web_instance1.instances[0].instance_id }}'
+            Port: 5000
+          - Id: '{{ web_instance2.instances[0].instance_id }}'
+            Port: 5000
+        tags:
+          App: Ansible-adv
+      register: aac_tg
+    - name: Create lb security group
+      amazon.aws.ec2_security_group:
+        name: lb_security_group
+        description: Allows http access
+        region: '{{ region }}'
+        rules:
+          - proto: tcp
+            ports:
+              - 80
+            cidr_ip: 0.0.0.0/0
+            rule_desc: allow all traffic on port 80
+        vpc_id: '{{ my_vpc_id }}'
+        state: present
+        tags:
+          App: Ansible-adv
+    - name: Create Load Balancer
+      amazon.aws.elb_application_lb:
+        name: AAC-lb
+        region: '{{ region }}'
+        security_groups: 
+          - lb_security_group
+        listeners:
+          - Protocol: HTTP
+            Port: 80
+            DefaultActions:
+              - TargetGroupName: AAC-tg 
+                Type: forward
+        subnets:
+          - '{{ default_subnet_b }}'
+          - '{{ default_subnet_c }}'
+        state: present
+        tags:
+          App: Ansible-adv
+# Send email
+- name: Send confirmation email
+  hosts: localhost
+  tasks:
+    - name: Send email
+      community.general.sendgrid:
+        api_key: '{{ sendgrid_api_key }}'
+        to_addresses: '{{ recipient_emails }}'
+        subject: 'App is up and running'
+        body: 'Ansible advanced course distributed flask app on aws cloud that uses mysql db is up.'
+        from_address: '{{ sender_email }}'
+      delegate_to: localhost

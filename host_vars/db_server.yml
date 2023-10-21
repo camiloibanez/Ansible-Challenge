@@ -1,0 +1,6 @@
+ansible_host: 3.137.200.140
+db_name: employee_db
+db_user: db_user
+db_user_password: Passw0rd
+db_password: root
+mysqld_socket: /var/run/mysqld/mysqld.sock

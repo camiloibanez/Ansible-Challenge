@@ -1,0 +1,96 @@
+---
+  # Install MySQL
+  - name: Install MySQL Database
+    become: true
+    apt:
+      name: '{{ item }}'
+      state: present
+    with_items:
+      - mysql-server
+      - mysql-client
+  # Setup MySQL
+  - name: Start MySQL Service
+    service:
+      name: mysql
+      state: started
+      enabled: true
+  # Set root password
+  - name: Flush Privileges pre password change
+    become: true
+    mysql_query:
+      query: FLUSH PRIVILEGES;
+      login_unix_socket: '{{ mysqld_socket }}'
+  - name: Select db
+    become: true
+    mysql_query:
+      query: use mysql;
+      login_unix_socket: '{{ mysqld_socket }}'
+  - name: Change root password
+    become: true
+    mysql_query:
+      query: ALTER USER 'root'@'localhost' IDENTIFIED BY '{{ db_password }}';
+      login_unix_socket: '{{ mysqld_socket }}'
+  - name: Flush Privileges post password change
+    become: true
+    mysql_query:
+      query: FLUSH PRIVILEGES;
+      login_unix_socket: '{{ mysqld_socket }}'
+  - name: Restart MySQL post password change
+    become: true
+    shell: service mysql restart
+  - name: Create '.my.cnf' file
+    template:
+      src: templates/mycnftemplate.txt.j2
+      dest: /home/ubuntu/.my.cnf
+  # Change bind address
+  - name: Change bind address
+    become: true
+    lineinfile:
+      path: /etc/mysql/mysql.conf.d/mysqld.cnf
+      regexp: '^bind-address'
+      line: 'bind-address = 0.0.0.0'
+  - name: Restart MySQL post config changes
+    become: true
+    shell: service mysql restart
+  # Creating Database
+  - name: Create Application Database
+    become: true
+    mysql_db:
+      name: '{{ db_name }}'
+      state: present
+      login_unix_socket: '{{ mysqld_socket }}'
+  # Create Users
+  - name: Create localhost Application user
+    become: true
+    mysql_user:
+      name: '{{ db_user }}'
+      password: '{{ db_user_password }}'
+      priv: '*.*:ALL'
+      state: present
+      login_unix_socket: '{{ mysqld_socket }}'
+  - name: Create remote Application user
+    become: true
+    mysql_user:
+      name: '{{ db_user }}'
+      password: '{{ db_user_password }}'
+      priv: '*.*:ALL'
+      host: '%'
+      state: present
+      login_unix_socket: '{{ mysqld_socket }}'
+  - name: Flush Privileges post user creation
+    become: true
+    mysql_query:
+      query: FLUSH PRIVILEGES;
+      login_unix_socket: '{{ mysqld_socket }}'
+  # Create Table
+  - name: Create Table
+    become: true
+    mysql_query:
+      query: CREATE TABLE {{ db_name }}.employees (name VARCHAR(20));
+      login_unix_socket: '{{ mysqld_socket }}'
+  # Add data
+  - name: Insert data
+    become: true
+    mysql_query:
+      query: INSERT INTO {{ db_name }}.employees VALUES ('JOHN');
+      login_unix_socket: '{{ mysqld_socket }}'
